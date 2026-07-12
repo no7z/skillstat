@@ -1,0 +1,35 @@
+{
+  "name": "skillstat",
+  "version": "0.1.0",
+  "description": "Audit your Claude Code skills: see which of your installed skills actually fire, which are dead weight eating context tokens, and slim them down. Local, zero-dependency, AI-free.",
+  "type": "module",
+  "bin": {
+    "skillstat": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --experimental-strip-types src/cli.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "agent-skills",
+    "skills",
+    "cli",
+    "audit",
+    "context",
+    "tokens",
+    "observability"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
