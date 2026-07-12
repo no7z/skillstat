@@ -1,5 +1,7 @@
 # skillstat
 
+**English** | [中文](README.zh-CN.md)
+
 **Audit your Claude Code skills.** You've installed dozens of agent skills. Which
 ones actually fire? Which are dead weight, silently injected into every session's
 context and eating tokens for nothing? `skillstat` reads your local Claude Code
