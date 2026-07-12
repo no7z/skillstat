@@ -16,17 +16,19 @@ interface Flags {
   all: boolean;
   out?: string;
   yes: boolean;
+  restore: boolean;
   _: string[];
 }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { days: 30, json: false, all: false, yes: false, _: [] };
+  const f: Flags = { days: 30, json: false, all: false, yes: false, restore: false, _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--days" || a === "-d") f.days = parseInt(argv[++i], 10) || 30;
     else if (a === "--json") f.json = true;
     else if (a === "--all" || a === "-a") f.all = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
+    else if (a === "--restore") f.restore = true;
     else if (a === "--out" || a === "-o") f.out = argv[++i];
     else f._.push(a);
   }
@@ -160,7 +162,66 @@ async function confirm(question: string): Promise<boolean> {
   });
 }
 
+function disabledRootPath(): string {
+  return path.join(userSkillsDir(), "..", "skills-disabled");
+}
+
+async function cmdRestore(f: Flags): Promise<void> {
+  const disabledRoot = disabledRootPath();
+  const skillsRoot = userSkillsDir();
+  if (!exists(disabledRoot)) {
+    console.log(c.green("✓") + ` nothing to restore — ${disabledRoot} doesn't exist.`);
+    return;
+  }
+  const names = fs
+    .readdirSync(disabledRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+  if (!names.length) {
+    console.log(c.green("✓") + ` nothing to restore — ${disabledRoot} is empty.`);
+    return;
+  }
+
+  console.log(
+    c.bold(`${names.length} disabled skill(s):`) + c.dim(`  → will move back to ${skillsRoot}`),
+  );
+  for (const n of names) console.log("  " + c.yellow(n));
+  console.log();
+
+  if (!f.yes) {
+    const ok = await confirm(c.bold(`Restore these ${names.length} skills?`) + " [y/N]");
+    if (!ok) {
+      console.log(c.dim("aborted — nothing moved."));
+      return;
+    }
+  }
+
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  let moved = 0;
+  for (const n of names) {
+    const dest = path.join(skillsRoot, n);
+    try {
+      if (exists(dest)) {
+        console.log(c.dim(`  skip ${n} (already present in skills/)`));
+        continue;
+      }
+      fs.renameSync(path.join(disabledRoot, n), dest);
+      moved++;
+    } catch (e) {
+      console.log(c.red(`  failed ${n}: ${(e as Error).message}`));
+    }
+  }
+  console.log(c.green(`✓ restored ${moved} skill(s)`) + c.dim(` to ${skillsRoot}`));
+  // Clean up the disabled dir if it's now empty.
+  try {
+    if (fs.readdirSync(disabledRoot).length === 0) fs.rmdirSync(disabledRoot);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function cmdSlim(a: Analysis, f: Flags): Promise<void> {
+  if (f.restore) return cmdRestore(f);
   const now = a.now;
   // Only slim USER skills we can safely move; never touch plugin caches.
   const candidates = a.installed.filter((s) => {
@@ -174,7 +235,7 @@ async function cmdSlim(a: Analysis, f: Flags): Promise<void> {
     return;
   }
 
-  const disabledRoot = path.join(userSkillsDir(), "..", "skills-disabled");
+  const disabledRoot = disabledRootPath();
   console.log(
     c.bold(`${candidates.length} user skill(s) idle for ≥${f.days}d:`) +
       c.dim(`  → will move to ${disabledRoot}`),
@@ -210,7 +271,7 @@ async function cmdSlim(a: Analysis, f: Flags): Promise<void> {
     }
   }
   console.log(c.green(`✓ moved ${moved} skill(s)`) + c.dim(` to ${disabledRoot}`));
-  console.log(c.dim(`  restore any with: `) + c.cyan(`mv "${disabledRoot}/<name>" "${userSkillsDir()}/"`));
+  console.log(c.dim(`  restore them all with: `) + c.cyan(`skillstat slim --restore`));
 }
 
 function help(): void {
@@ -224,12 +285,14 @@ ${c.bold("COMMANDS")}
   cost            Estimate skill_listing context tokens & zombie waste
   report          Write a self-contained HTML report (offline)
   slim            Move idle user skills to skills-disabled/ (reversible)
+                  slim --restore moves them all back
 
 ${c.bold("OPTIONS")}
   -d, --days <n>  Idle threshold for "zombie" (default 30)
   -a, --all       scan: include offered-but-never-triggered skills
   -o, --out <f>   report: output path (default skillstat-report.html)
   -y, --yes       slim: skip the confirmation prompt
+      --restore   slim: move skills-disabled/* back into skills/
       --json      Machine-readable output (scan, cost)
 
 ${c.bold("EXAMPLES")}
@@ -237,6 +300,7 @@ ${c.bold("EXAMPLES")}
   skillstat cost                ${c.dim("# how much context are dead skills costing?")}
   skillstat report -o r.html    ${c.dim("# shareable HTML")}
   skillstat slim --days 60      ${c.dim("# archive skills idle 60+ days")}
+  skillstat slim --restore      ${c.dim("# undo: bring archived skills back")}
 
 Reads ~/.claude transcripts & skills locally. Nothing leaves your machine.`);
 }
@@ -251,6 +315,10 @@ async function main(): Promise<void> {
     console.log(VERSION);
     return;
   }
+
+  // Restore reads only skills-disabled/ — it must work even when transcripts
+  // and the skills dir are empty (which is exactly the post-slim state).
+  if (cmd === "slim" && f.restore) return cmdRestore(f);
 
   const a = analyze();
   if (a.sessionCount === 0 && a.installed.length === 0) {

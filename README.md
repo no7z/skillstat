@@ -47,6 +47,7 @@ skillstat scan --all         # include offered-but-never-triggered skills
 skillstat cost               # how much context are idle skills costing?
 skillstat report -o r.html   # self-contained HTML report (offline, shareable)
 skillstat slim --days 60     # archive skills idle 60+ days (asks first)
+skillstat slim --restore     # undo: move archived skills back
 ```
 
 ### Commands
@@ -56,7 +57,7 @@ skillstat slim --days 60     # archive skills idle 60+ days (asks first)
 | `scan`   | Table of every skill: fires, explicit-vs-auto activations, last-fired, projects. |
 | `cost`   | Estimated `skill_listing` token overhead per session and the share wasted on idle skills. |
 | `report` | Writes a self-contained dark-themed HTML dashboard (double-click, no server). |
-| `slim`   | Moves idle **user** skills (never plugins) to `~/.claude/skills-disabled/`. Reversible, confirms first. |
+| `slim`   | Moves idle **user** skills (never plugins) to `~/.claude/skills-disabled/`. Reversible (`--restore`), confirms first. |
 
 ### Options
 
@@ -66,6 +67,7 @@ skillstat slim --days 60     # archive skills idle 60+ days (asks first)
 | `-a, --all` | `scan`: also list offered skills that never triggered. |
 | `-o, --out <f>` | `report`: output path (default `skillstat-report.html`). |
 | `-y, --yes` | `slim`: skip the confirmation prompt. |
+| `--restore` | `slim`: move everything in `skills-disabled/` back into `skills/`. |
 | `--json` | Machine-readable output for `scan` and `cost`. |
 
 ## How it works
