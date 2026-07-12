@@ -8,7 +8,7 @@ import { fmtTokens } from "./tokens.js";
 import { renderHtml } from "./report.js";
 import { userSkillsDir, exists } from "./paths.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 interface Flags {
   days: number;

@@ -1,6 +1,6 @@
 {
   "name": "skillstat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Audit your Claude Code skills: see which of your installed skills actually fire, which are dead weight eating context tokens, and slim them down. Local, zero-dependency, AI-free.",
   "type": "module",
   "bin": {

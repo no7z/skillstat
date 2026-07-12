@@ -39,6 +39,23 @@ npx skillstat
 
 Requires Node ≥ 18. No other dependencies.
 
+### Use it as an agent skill
+
+skillstat ships a `SKILL.md`, so your coding agent can run it for you — just ask
+*"which of my skills do I actually use?"* or *"what's filling my context?"* and
+it'll pick the right sub-command.
+
+```bash
+# Claude Code / Codex / Cursor (Agent Skills compatible):
+npx skills add no7z/skillstat
+```
+
+Or drop it in manually — copy this repo's `SKILL.md` into
+`~/.claude/skills/skillstat/SKILL.md` (Claude Code) or `~/.codex/skills/…`
+(Codex). Then invoke it explicitly with `/skillstat`, or let it auto-activate
+from the description. The skill just shells out to the `skillstat` CLI, so keep
+the CLI installed (or it falls back to `npx`).
+
 ## Usage
 
 ```bash
