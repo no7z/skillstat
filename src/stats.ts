@@ -105,3 +105,10 @@ export function daysAgo(ts: number, now: number): number | null {
   if (!ts) return null;
   return Math.floor((now - ts) / 86_400_000);
 }
+
+/** A skill is a "zombie" if it never fired, or last fired >= `days` ago. */
+export function isZombie(s: SkillStat, now: number, days: number): boolean {
+  if (s.triggers === 0) return true;
+  const d = daysAgo(s.lastTriggered, now);
+  return d !== null && d >= days;
+}

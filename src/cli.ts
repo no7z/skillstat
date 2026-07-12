@@ -2,13 +2,23 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { analyze, daysAgo, Analysis } from "./stats.js";
+import { createRequire } from "node:module";
+import { analyze, daysAgo, isZombie, Analysis } from "./stats.js";
 import { c, table, relTime } from "./term.js";
 import { fmtTokens } from "./tokens.js";
 import { renderHtml } from "./report.js";
 import { userSkillsDir, exists } from "./paths.js";
 
-const VERSION = "0.1.1";
+const require = createRequire(import.meta.url);
+// Single source of truth for the version — read from package.json so the CLI
+// string can never drift from what npm publishes.
+const VERSION: string = (() => {
+  try {
+    return require("../package.json").version as string;
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 interface Flags {
   days: number;
@@ -33,12 +43,6 @@ function parseFlags(argv: string[]): Flags {
     else f._.push(a);
   }
   return f;
-}
-
-function isZombie(s: Analysis["skills"][number], now: number, days: number): boolean {
-  if (s.triggers === 0) return true;
-  const d = daysAgo(s.lastTriggered, now);
-  return d !== null && d >= days;
 }
 
 function cmdScan(a: Analysis, f: Flags): void {

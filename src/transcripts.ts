@@ -49,7 +49,7 @@ export function parseListingNames(content: string): string[] {
   return names;
 }
 
-function parseSession(file: string, projectLabel: string): {
+function parseSession(file: string, fallbackLabel: string): {
   triggers: Trigger[];
   session: SessionInfo | null;
   errors: number;
@@ -61,6 +61,9 @@ function parseSession(file: string, projectLabel: string): {
   let listingTokens = 0;
   let start = 0;
   let end = 0;
+  // Events carry the real absolute cwd; use it for a truthful project label
+  // (the transcript dir name is a lossy encoding that mangles worktree paths).
+  const cwdCounts = new Map<string, number>();
 
   const raw = fs.readFileSync(file, "utf8");
   for (const line of raw.split("\n")) {
@@ -73,6 +76,9 @@ function parseSession(file: string, projectLabel: string): {
       continue;
     }
     if (o.sessionId) sessionId = o.sessionId;
+    if (typeof o.cwd === "string" && o.cwd) {
+      cwdCounts.set(o.cwd, (cwdCounts.get(o.cwd) ?? 0) + 1);
+    }
     const when = ts(o);
     if (when) {
       if (!start || when < start) start = when;
@@ -90,7 +96,7 @@ function parseSession(file: string, projectLabel: string): {
               triggers.push({
                 skill,
                 timestamp: when,
-                project: projectLabel,
+                project: "",
                 session: sessionId,
                 source: "explicit",
               });
@@ -114,7 +120,7 @@ function parseSession(file: string, projectLabel: string): {
             triggers.push({
               skill: name,
               timestamp: when,
-              project: projectLabel,
+              project: "",
               session: sessionId,
               source: "auto",
             });
@@ -124,9 +130,22 @@ function parseSession(file: string, projectLabel: string): {
     }
   }
 
+  // Pick the session's dominant cwd; label = its basename. Fall back to the
+  // (lossy) decoded transcript dir name when no cwd was recorded.
+  let bestCwd = "";
+  let bestCount = -1;
+  for (const [cwd, n] of cwdCounts) {
+    if (n > bestCount) {
+      bestCount = n;
+      bestCwd = cwd;
+    }
+  }
+  const label = bestCwd ? path.basename(bestCwd) : fallbackLabel;
+  for (const t of triggers) t.project = label;
+
   const session: SessionInfo = {
     session: sessionId,
-    project: projectLabel,
+    project: label,
     file,
     offered,
     listingTokens,

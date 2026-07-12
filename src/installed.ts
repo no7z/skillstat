@@ -15,13 +15,27 @@ function parseFrontmatter(md: string): { name?: string; description?: string } {
   const end = md.indexOf("\n---", 3);
   if (end === -1) return {};
   const block = md.slice(3, end);
+  const lines = block.split("\n");
   const out: { name?: string; description?: string } = {};
-  for (const line of block.split("\n")) {
-    const m = /^(name|description)\s*:\s*(.*)$/.exec(line);
-    if (m) {
-      let v = m[2].trim().replace(/^["']|["']$/g, "");
-      (out as any)[m[1]] = v;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(name|description)\s*:\s*(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const key = m[1] as "name" | "description";
+    let v = m[2].trim();
+    if (v === ">" || v === ">-" || v === "|" || v === "|-") {
+      // YAML block scalar: value is the following more-indented lines.
+      const parts: string[] = [];
+      const fold = v[0] === ">";
+      for (let j = i + 1; j < lines.length; j++) {
+        if (!/^\s+\S/.test(lines[j])) break; // dedent ends the block
+        parts.push(lines[j].trim());
+        i = j;
+      }
+      v = fold ? parts.join(" ") : parts.join("\n");
+    } else {
+      v = v.replace(/^["']|["']$/g, "");
     }
+    out[key] = v;
   }
   return out;
 }

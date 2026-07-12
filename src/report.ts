@@ -1,4 +1,4 @@
-import { Analysis, daysAgo } from "./stats.js";
+import { Analysis, daysAgo, isZombie } from "./stats.js";
 import { fmtTokens } from "./tokens.js";
 
 function esc(s: string): string {
@@ -16,11 +16,7 @@ function esc(s: string): string {
 export function renderHtml(a: Analysis, zombieDays: number): string {
   const now = a.now;
   const active = a.skills.filter((s) => s.triggers > 0);
-  const zombies = a.skills.filter((s) => {
-    if (s.triggers === 0) return s.installed || a.offeredNames.has(s.name);
-    const d = daysAgo(s.lastTriggered, now);
-    return d !== null && d >= zombieDays;
-  });
+  const zombies = a.skills.filter((s) => isZombie(s, now, zombieDays));
   const wasted = zombies.filter((s) => s.installed).length;
   const perSession = a.avgListingTokens;
 
