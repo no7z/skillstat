@@ -3,11 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { createRequire } from "node:module";
-import { analyze, daysAgo, isZombie, Analysis } from "./stats.js";
+import { analyze, daysAgo, isAgentZombie, Analysis } from "./stats.js";
 import { c, table, relTime } from "./term.js";
 import { fmtTokens } from "./tokens.js";
 import { renderHtml } from "./report.js";
 import { userSkillsDir, exists } from "./paths.js";
+import { AgentName, ALL_AGENTS, isAgentName } from "./agents.js";
 
 const require = createRequire(import.meta.url);
 // Single source of truth for the version — read from package.json so the CLI
@@ -27,11 +28,12 @@ interface Flags {
   out?: string;
   yes: boolean;
   restore: boolean;
+  agents: AgentName[];
   _: string[];
 }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { days: 30, json: false, all: false, yes: false, restore: false, _: [] };
+  const f: Flags = { days: 30, json: false, all: false, yes: false, restore: false, agents: [...ALL_AGENTS], _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--days" || a === "-d") f.days = parseInt(argv[++i], 10) || 30;
@@ -40,6 +42,13 @@ function parseFlags(argv: string[]): Flags {
     else if (a === "--yes" || a === "-y") f.yes = true;
     else if (a === "--restore") f.restore = true;
     else if (a === "--out" || a === "-o") f.out = argv[++i];
+    else if (a === "--agent" || a === "--source") {
+      const values = (argv[++i] ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+      if (!values.length || values.some((value) => !isAgentName(value))) {
+        throw new Error("--agent must be claude, codex, cursor, or a comma-separated combination");
+      }
+      f.agents = [...new Set(values as AgentName[])];
+    }
     else f._.push(a);
   }
   return f;
@@ -58,7 +67,9 @@ function cmdScan(a: Analysis, f: Flags): void {
       name,
       s.triggers > 0 ? c.bold(String(s.triggers)) : c.red("0"),
       c.dim(`${s.explicit}/${s.auto}`),
+      c.dim(String(s.observed)),
       relTime(d),
+      c.gray(s.agents.join(",")),
       c.gray(s.source),
       c.gray(s.projects.slice(0, 3).join(",")),
     ];
@@ -69,7 +80,9 @@ function cmdScan(a: Analysis, f: Flags): void {
         { header: "SKILL" },
         { header: "FIRES", align: "right" },
         { header: "EXP/AUTO", align: "right" },
+        { header: "OBS", align: "right" },
         { header: "LAST", align: "right" },
+        { header: "AGENTS" },
         { header: "SRC" },
         { header: "PROJECTS" },
       ],
@@ -80,18 +93,28 @@ function cmdScan(a: Analysis, f: Flags): void {
   console.log(
     "\n" +
       c.dim(
-        `${a.sessionCount} sessions · ${active} active · ${a.installed.length} installed · ${a.totalTriggers} total fires` +
+        `${a.agents.join("+")} · ${a.sessionCount} sessions · ${active} active · ${a.installed.length} installs · ${a.totalTriggers} total fires` +
           (f.all ? "" : c.dim("  (use --all to include untriggered offered skills)")),
       ),
   );
 }
 
 function cmdCost(a: Analysis, f: Flags): void {
+  if (!a.agents.includes("claude")) {
+    if (f.json) {
+      console.log(JSON.stringify({ available: false, reason: "skill_listing context data is only present in Claude Code transcripts" }, null, 2));
+    } else {
+      console.log(c.yellow("Context-cost analysis is unavailable for Codex and Cursor transcripts."));
+      console.log(c.dim("Run with --agent claude; skillstat only estimates cost from Claude skill_listing attachments."));
+    }
+    return;
+  }
   const now = a.now;
-  const installed = a.installed.length;
-  const zombiesInstalled = a.installed.filter((s) => {
+  const claudeInstalled = a.installed.filter((skill) => skill.agent === "claude");
+  const installed = claudeInstalled.length;
+  const zombiesInstalled = claudeInstalled.filter((s) => {
     const st = a.skills.find((x) => x.name === s.name);
-    return !st || isZombie(st, now, f.days);
+    return !st || isAgentZombie(st, "claude", now, f.days);
   });
   const perSession = a.avgListingTokens;
   // The listing tax is only paid for skills actually IN the listing, so the
@@ -99,7 +122,7 @@ function cmdCost(a: Analysis, f: Flags): void {
   // installs (which can exceed the offered set and push the share past 1).
   const offeredZombies = [...a.offeredNames].filter((name) => {
     const st = a.skills.find((x) => x.name === name);
-    return !st || isZombie(st, now, f.days);
+    return !st || isAgentZombie(st, "claude", now, f.days);
   });
   const offeredCount = a.offeredNames.size || 1;
   const zombieShare = Math.min(1, offeredZombies.length / offeredCount);
@@ -229,9 +252,9 @@ async function cmdSlim(a: Analysis, f: Flags): Promise<void> {
   const now = a.now;
   // Only slim USER skills we can safely move; never touch plugin caches.
   const candidates = a.installed.filter((s) => {
-    if (s.source !== "user") return false;
+    if (s.agent !== "claude" || s.source !== "user") return false;
     const st = a.skills.find((x) => x.name === s.name);
-    return !st || isZombie(st, now, f.days);
+    return !st || isAgentZombie(st, "claude", now, f.days);
   });
 
   if (!candidates.length) {
@@ -279,7 +302,7 @@ async function cmdSlim(a: Analysis, f: Flags): Promise<void> {
 }
 
 function help(): void {
-  console.log(`${c.bold("skillstat")} v${VERSION} — audit your Claude Code skills
+  console.log(`${c.bold("skillstat")} v${VERSION} — audit skills across Claude Code, Codex, and Cursor
 
 ${c.bold("USAGE")}
   skillstat <command> [options]
@@ -293,6 +316,7 @@ ${c.bold("COMMANDS")}
 
 ${c.bold("OPTIONS")}
   -d, --days <n>  Idle threshold for "zombie" (default 30)
+      --agent <a>  claude,codex,cursor sources (default all; --source is an alias)
   -a, --all       scan: include offered-but-never-triggered skills
   -o, --out <f>   report: output path (default skillstat-report.html)
   -y, --yes       slim: skip the confirmation prompt
@@ -306,7 +330,9 @@ ${c.bold("EXAMPLES")}
   skillstat slim --days 60      ${c.dim("# archive skills idle 60+ days")}
   skillstat slim --restore      ${c.dim("# undo: bring archived skills back")}
 
-Reads ~/.claude transcripts & skills locally. Nothing leaves your machine.`);
+Detection: Claude uses Skill/invoked_skills events; Codex uses explicit /commands and
+observed SKILL.md reads; Cursor exposes explicit /commands only. Cursor transcript
+files do not carry event timestamps, so their file mtime is used. Reads local files only.`);
 }
 
 async function main(): Promise<void> {
@@ -324,11 +350,11 @@ async function main(): Promise<void> {
   // and the skills dir are empty (which is exactly the post-slim state).
   if (cmd === "slim" && f.restore) return cmdRestore(f);
 
-  const a = analyze();
+  const a = analyze(f.agents);
   if (a.sessionCount === 0 && a.installed.length === 0) {
     console.log(
-      c.yellow("No Claude Code data found.") +
-        c.dim(`\nLooked in ~/.claude/projects and ~/.claude/skills. Set CLAUDE_CONFIG_DIR to override.`),
+      c.yellow(`No ${f.agents.join("/")} skill data found.`) +
+        c.dim(`\nChecked local agent transcripts and skill directories. Use CLAUDE_CONFIG_DIR, CODEX_HOME, or CURSOR_CONFIG_DIR to override.`),
     );
     return;
   }

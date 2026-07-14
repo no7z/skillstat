@@ -9,6 +9,20 @@ export function claudeHome(): string {
   return path.join(os.homedir(), ".claude");
 }
 
+/** Root of the Codex config dir, honoring CODEX_HOME. */
+export function codexHome(): string {
+  const override = process.env.CODEX_HOME;
+  if (override && override.trim()) return override.trim();
+  return path.join(os.homedir(), ".codex");
+}
+
+/** Root of the Cursor config dir, honoring CURSOR_CONFIG_DIR. */
+export function cursorHome(): string {
+  const override = process.env.CURSOR_CONFIG_DIR;
+  if (override && override.trim()) return override.trim();
+  return path.join(os.homedir(), ".cursor");
+}
+
 export function projectsDir(): string {
   return path.join(claudeHome(), "projects");
 }
@@ -19,6 +33,14 @@ export function userSkillsDir(): string {
 
 export function pluginsDir(): string {
   return path.join(claudeHome(), "plugins");
+}
+
+export function codexSessionsDir(): string {
+  return path.join(codexHome(), "sessions");
+}
+
+export function cursorProjectsDir(): string {
+  return path.join(cursorHome(), "projects");
 }
 
 export function exists(p: string): boolean {

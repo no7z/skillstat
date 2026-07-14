@@ -2,15 +2,14 @@
 
 **English** | [中文](README.zh-CN.md)
 
-**Audit your Claude Code skills.** You've installed dozens of agent skills. Which
-ones actually fire? Which are dead weight, silently injected into every session's
-context and eating tokens for nothing? `skillstat` reads your local Claude Code
-transcripts and tells you — then helps you slim down.
+**Audit skills across Claude Code, Codex, and Cursor.** You've installed dozens
+of agent skills. Which ones actually fire, in which agent, and which are just
+sitting on disk? `skillstat` reads local transcript evidence and tells you.
 
-- 🔍 **Real usage, not guesses** — parses `~/.claude` session transcripts to count
-  which skills actually triggered, how often, when last, and in which projects.
-- 💸 **Context cost** — estimates how many tokens the skill listing injects per
-  session, and how much of that is spent on skills you never use.
+- 🔍 **Cross-agent evidence** — one view for Claude Code, Codex, and Cursor,
+  including per-agent counts, last use, projects, and trigger source.
+- 💸 **Claude context cost** — estimates how many tokens Claude's skill listing
+  injects per session and how much is spent on skills you never use.
 - ✂️ **Reversible slimming** — moves idle skills into `skills-disabled/` so you can
   restore any of them with a single `mv`.
 - 🔒 **Local & AI-free** — pure deterministic parsing. Nothing leaves your machine,
@@ -63,6 +62,7 @@ the CLI installed (or it falls back to `npx`).
 ```bash
 skillstat                    # scan: per-skill trigger counts (default)
 skillstat scan --all         # include offered-but-never-triggered skills
+skillstat scan --agent codex # one source; comma-separated combinations work
 skillstat cost               # how much context are idle skills costing?
 skillstat report -o r.html   # self-contained HTML report (offline, shareable)
 skillstat slim --days 60     # archive skills idle 60+ days (asks first)
@@ -73,8 +73,8 @@ skillstat slim --restore     # undo: move archived skills back
 
 | Command  | What it does |
 |----------|--------------|
-| `scan`   | Table of every skill: fires, explicit-vs-auto activations, last-fired, projects. |
-| `cost`   | Estimated `skill_listing` token overhead per session and the share wasted on idle skills. |
+| `scan`   | Table of every skill: fires, agent, evidence type, last-fired, projects. |
+| `cost`   | Claude-only `skill_listing` token overhead per session and the share wasted on idle skills. |
 | `report` | Writes a self-contained dark-themed HTML dashboard (double-click, no server). |
 | `slim`   | Moves idle **user** skills (never plugins) to `~/.claude/skills-disabled/`. Reversible (`--restore`), confirms first. |
 
@@ -83,6 +83,7 @@ skillstat slim --restore     # undo: move archived skills back
 | Flag | Meaning |
 |------|---------|
 | `-d, --days <n>` | Idle threshold for "zombie" skills (default 30). |
+| `--agent <list>` | `claude`, `codex`, `cursor`, or a comma-separated combination (default all). `--source` is an alias. |
 | `-a, --all` | `scan`: also list offered skills that never triggered. |
 | `-o, --out <f>` | `report`: output path (default `skillstat-report.html`). |
 | `-y, --yes` | `slim`: skip the confirmation prompt. |
@@ -91,28 +92,35 @@ skillstat slim --restore     # undo: move archived skills back
 
 ## How it works
 
-Every Claude Code session is recorded as a JSONL transcript under
-`~/.claude/projects/`. skillstat walks those files and counts two trigger signals:
+The agents expose different evidence, so skillstat reports only what each local
+format can prove:
 
-- **explicit** — a `Skill` tool call (you typed `/skill-name` or the agent invoked it), and
-- **auto** — an `invoked_skills` attachment (a skill auto-activated from description matching).
+| Agent | Transcript evidence | Installed-skill roots |
+|-------|---------------------|------------------------|
+| Claude Code | `Skill` tool calls (**explicit**) and `invoked_skills` (**auto**) | `~/.claude/skills`, `~/.claude/plugins` |
+| Codex | explicit `/skill` user messages and tool calls that read a skill's `SKILL.md` (**observed**) | `~/.codex/skills`, `~/.agents/skills`, Codex plugin cache |
+| Cursor | explicit `/skill` user messages | `~/.cursor/skills` |
+
+Cursor transcript events do not currently contain timestamps, so skillstat uses
+the transcript file's modification time for `last-fired`. Cursor auto-activation
+and Codex offered-list/context cost are not claimed because those signals are not
+present in their local transcript formats.
 
 For context cost it reads the `skill_listing` attachment injected into each
 session and estimates its token size (heuristic, no tokenizer — kept dependency-free
-and offline). Installed skills are discovered from `~/.claude/skills/` and
-`~/.claude/plugins/`.
+and offline). `cost` is therefore Claude-only, even in an all-agent scan.
 
-Set `CLAUDE_CONFIG_DIR` to point at a non-default config location.
+Set `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, or `CURSOR_CONFIG_DIR` to point at a
+non-default config location.
 
 ### Caveats
 
 - Token figures are **estimates** (chars/words heuristic), meant for relative
   comparison, not billing.
-- The transcript format is an internal Claude Code detail, not a public API; a
-  future version could change field names. skillstat degrades gracefully (skips
-  lines it can't parse) rather than crashing.
+- Transcript formats are internal implementation details and may change.
+  skillstat degrades gracefully (skips lines it can't parse) rather than crashing.
 - `slim` only ever touches skills under `~/.claude/skills/` — plugin-provided
-  skills are read-only and never moved.
+  skills and Codex/Cursor installs are read-only and never moved.
 
 ## License
 
