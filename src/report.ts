@@ -28,7 +28,9 @@ export function renderHtml(a: Analysis, zombieDays: number): string {
       <td class="name">${esc(s.name)}</td>
       <td class="num">${s.triggers}</td>
       <td class="num dim">${s.explicit}/${s.auto}</td>
+      <td class="num dim">${s.observed}</td>
       <td class="last">${last}</td>
+      <td class="src">${esc(s.agents.join(", "))}</td>
       <td class="src">${esc(s.source)}</td>
       <td class="proj">${esc(s.projects.join(", "))}</td>
       <td class="desc">${esc(s.description).slice(0, 120)}</td>
@@ -72,7 +74,7 @@ export function renderHtml(a: Analysis, zombieDays: number): string {
 <body>
   <h1>skillstat</h1>
   <div class="sub">generated ${new Date(now).toISOString().replace("T", " ").slice(0, 16)}
-    · ${a.sessionCount} sessions · zombie threshold ${zombieDays}d</div>
+    · ${esc(a.agents.join(" + "))} · ${a.sessionCount} sessions · zombie threshold ${zombieDays}d</div>
   <div class="cards">
     <div class="card"><div class="k">Installed / offered</div><div class="v">${a.installed.length}</div></div>
     <div class="card ok"><div class="k">Active skills</div><div class="v">${active.length}</div></div>
@@ -82,14 +84,15 @@ export function renderHtml(a: Analysis, zombieDays: number): string {
   </div>
   <input id="q" placeholder="filter skills…" oninput="filter()">
   <table id="t"><thead><tr>
-    <th>Skill</th><th class="num">Fires</th><th class="num">exp/auto</th>
-    <th class="last">Last</th><th>Source</th><th>Projects</th><th>Description</th>
+    <th>Skill</th><th class="num">Fires</th><th class="num">exp/auto</th><th class="num">observed</th>
+    <th class="last">Last</th><th>Agents</th><th>Source</th><th>Projects</th><th>Description</th>
   </tr></thead><tbody>
 ${rows}
   </tbody></table>
-  <div class="foot">Token figures are heuristic estimates (no tokenizer, offline). exp/auto =
-    explicit /skill invocations vs auto-activations. "${wasted}" installed zombie skills are
-    candidates for <code>skillstat slim</code>.</div>
+  <div class="foot">Trigger evidence: Claude = Skill tool calls + invoked_skills; Codex = explicit
+    /commands + observed SKILL.md reads; Cursor = explicit /commands only (file mtime is used because
+    event timestamps are absent). Context-token estimates are Claude-only. "${wasted}" installed zombie
+    skills are candidates for <code>skillstat slim</code>; slim only moves Claude user skills.</div>
 <script>
 function filter(){var q=document.getElementById('q').value.toLowerCase();
   document.querySelectorAll('#t tbody tr').forEach(function(r){

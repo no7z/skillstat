@@ -1,7 +1,7 @@
 {
   "name": "skillstat",
-  "version": "0.1.3",
-  "description": "Audit your Claude Code skills: see which of your installed skills actually fire, which are dead weight eating context tokens, and slim them down. Local, zero-dependency, AI-free.",
+  "version": "0.2.0",
+  "description": "Audit agent skills across Claude Code, Codex, and Cursor using local transcript evidence. Local, zero-dependency, AI-free.",
   "type": "module",
   "bin": {
     "skillstat": "dist/cli.js"
@@ -15,10 +15,13 @@
   "scripts": {
     "build": "tsc",
     "dev": "node --experimental-strip-types src/cli.ts",
-    "prepublishOnly": "npm run build"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepublishOnly": "npm run test"
   },
   "keywords": [
     "claude-code",
+    "codex",
+    "cursor",
     "agent-skills",
     "skills",
     "cli",
